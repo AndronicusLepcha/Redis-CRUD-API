@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from django.http import HttpResponse
 from .forms import dummy_data_form
 from .models import dummy_model_data
-from django.core.files import File
+from time import sleep
 # Create your views here.
 
 #landing page
@@ -67,30 +67,45 @@ def retrieve_data(request):
 def update_data(request):
     try:
         redis_connection=Redis(host='redis', port=6379, db=1)
-        print("connection success!")
+        lock_key = "mylist_lock"
+        lock_acquired = redis_connection.set(lock_key, "locked", ex=4, nx=True)  # redis client lock 
+        
+        if lock_acquired:
+            print("Lock accquired ! and sleeping for 13 second ")
+            print("Key -> ",redis_connection.get("mylist_lock"))
+            # sleep(13)
+            print("Key ->",redis_connection.get("mylist_lock"))
+            page=request.data.get('page')
+            start_index = (page - 1) * 20
+            end_index = start_index + 20 - 1
+            new_data=request.data.get('new_data')
+            id=new_data["id"]
+            
+            redis_data_chunk = redis_connection.lrange("media_files_list", start_index, end_index)
+            redis_data = [json.loads(item) for item in redis_data_chunk]
+                
+            for item in redis_data:
+                if id == int(item.get('id')):
+                    item.update(new_data)
+                    break
+            updated_redis_data_chunk = [json.dumps(item) for item in redis_data]
+            
+            for index, item_json in enumerate(updated_redis_data_chunk):
+                redis_connection.lset("media_files_list", start_index + index, item_json)
+        else:
+            return HttpResponse("Resources is already in use, plase wait for some time!",status=503)
+                
     except Exception as e:
-        print("Exception",e)
-        print("Redis connection failed ! ")
+        print(e)
+        return HttpResponse("Failed to Proecess the Request")
         
-    page=request.data.get('page')
-    start_index = (page - 1) * 20
-    end_index = start_index + 20 - 1
-    new_data=request.data.get('new_data')
-    id=new_data["id"]
-    
-    redis_data_chunk = redis_connection.lrange("media_files_list", start_index, end_index)
-    redis_data = [json.loads(item) for item in redis_data_chunk]
-        
-    for item in redis_data:
-        if id == int(item.get('id')):
-            item.update(new_data)
-        
-    updated_redis_data_chunk = [json.dumps(item) for item in redis_data]
-    for index, item_json in enumerate(updated_redis_data_chunk):
-        # The list indices are assumed to start from start_index.
-        redis_connection.lset("media_files_list", start_index + index, item_json)
-    
-    return Response(redis_connection.lrange("media_files_list", start_index, end_index))
+    finally:
+        redis_connection.delete(lock_key)
+        redis_connection.close()
+        print("Key ->",redis_connection.get("mylist_lock"))
+        print("connection closed")
+
+    return Response(json.loads( item ) for item in (redis_connection.lrange("media_files_list", start_index, end_index)))
 
 # DELETE 
 @api_view(['POST'])
@@ -102,7 +117,7 @@ def delete_data(request):
         print("Exception",e)
         print("Redis connection failed ! ")
         
-    redis_connection.lrem("media_files_list", 0, json.dumps(request.data))  
+    redis_connection.lrem("media_files_list", 0, json.dumps(request.data))
     return HttpResponse("Item Deleted!")
 
 def upload_file(request):
