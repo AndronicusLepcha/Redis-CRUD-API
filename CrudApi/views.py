@@ -16,10 +16,18 @@ def load_data(request):
     return HttpResponse("API create_data added the new data in the DB and REDIS !")
 
 # CREATE
-@api_view(['GET'])
+@api_view(['POST'])
 def create_data(request):
+    try:
+        redis_connection=Redis(host='redis', port=6379, db=1)
+        print("connection success!")
+    except Exception as e:
+        print("Redis connection failed ! || Exception",e)
     
+    payload=request.data
+    redis_connection.lpush("media_files_list", json.dumps(payload))
     return HttpResponse("API create_data added the new data in the DB and REDIS !")
+
 
 # RETRIEVE
 @api_view(['POST'])
@@ -69,15 +77,15 @@ def delete_data(request):
     return Response(data)
 
 def upload_file(request):
-    # redis_connection = Redis(host='redis', port=6379, db=1)
     if request.method == 'POST':
         form = dummy_data_form(request.POST, request.FILES)
         uploaded_instances = []
         if form.is_valid():
-            for _ in range(200000): 
-                uploaded_data = form.save(commit=False)
-                uploaded_instances.append(uploaded_data)
-            dummy_model_data.objects.bulk_create(uploaded_instances)
+            form.save()
+            # for _ in range(200000): 
+            #     uploaded_data = form.save(commit=False)
+            #     uploaded_instances.append(uploaded_data)
+            # dummy_model_data.objects.bulk_create(uploaded_instances)
             return HttpResponse("Upload Successfull")
     else:
         form = dummy_data_form()
