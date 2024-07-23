@@ -8,5 +8,5 @@ urlpatterns = [
     path('RetrieveData', retrieve_data , name="RetrieveData"),
     path('UpdateData', update_data , name="UpdateData"),
     path('UploadFile', upload_file , name="UploadFile"),
-    path('DeleteFile', delete_data , name="DeleteFile")
+    path('DeleteData', delete_data , name="DeleteData")
 ]
