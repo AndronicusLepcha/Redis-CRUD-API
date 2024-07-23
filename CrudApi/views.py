@@ -12,7 +12,6 @@ from django.core.files import File
 #landing page
 @api_view(['GET'])
 def load_data(request):
-    
     return HttpResponse("API create_data added the new data in the DB and REDIS !")
 
 # CREATE
@@ -63,23 +62,53 @@ def retrieve_data(request):
     return Response(redis_data)
     
     
-
 # UPDATE
-@api_view(['GET'])
+@api_view(['POST'])
 def update_data(request):
-    data=None
-    return Response(data)
+    try:
+        redis_connection=Redis(host='redis', port=6379, db=1)
+        print("connection success!")
+    except Exception as e:
+        print("Exception",e)
+        print("Redis connection failed ! ")
+        
+    page=request.data.get('page')
+    start_index = (page - 1) * 20
+    end_index = start_index + 20 - 1
+    new_data=request.data.get('new_data')
+    id=new_data["id"]
+    
+    redis_data_chunk = redis_connection.lrange("media_files_list", start_index, end_index)
+    redis_data = [json.loads(item) for item in redis_data_chunk]
+        
+    for item in redis_data:
+        if id == int(item.get('id')):
+            item.update(new_data)
+        
+    updated_redis_data_chunk = [json.dumps(item) for item in redis_data]
+    for index, item_json in enumerate(updated_redis_data_chunk):
+        # The list indices are assumed to start from start_index.
+        redis_connection.lset("media_files_list", start_index + index, item_json)
+    
+    return Response(redis_connection.lrange("media_files_list", start_index, end_index))
 
 # DELETE 
-@api_view(['GET'])
+@api_view(['POST'])
 def delete_data(request):
-    data=None
-    return Response(data)
+    try:
+        redis_connection=Redis(host='redis', port=6379, db=1)
+        print("connection success!")
+    except Exception as e:
+        print("Exception",e)
+        print("Redis connection failed ! ")
+        
+    redis_connection.lrem("media_files_list", 0, json.dumps(request.data))  
+    return HttpResponse("Item Deleted!")
 
 def upload_file(request):
     if request.method == 'POST':
         form = dummy_data_form(request.POST, request.FILES)
-        uploaded_instances = []
+        # uploaded_instances = []
         if form.is_valid():
             form.save()
             # for _ in range(200000): 
